@@ -1,160 +1,147 @@
 import pandas as pd
 import numpy as np
-import joblib
-import json
 import os
+import json
+import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-# -------------------------------------------------
+# -------------------
 # CONFIG
-# -------------------------------------------------
-RAW_DATA_PATH = "synthetic_rpw_final_fixed_settlement_risk.csv"   # your raw dataset
-TRAIN_OUT = "data/rpw_train.csv"
-VALID_OUT = "data/rpw_valid.csv"
+# -------------------
+RAW_DATA_PATH = "data/corridor_friction_35_countries_merged.csv"
+
+TRAIN_OUT = "data/processed/rpw_train.csv"
+VALID_OUT = "data/processed/rpw_valid.csv"
+
 PREPROCESSOR_OUT = "models/preprocessor.pkl"
 FEATURE_NAMES_OUT = "models/feature_names.json"
-
 TARGET = "friction_score"
 
-# -------------------------------------------------
-# LOAD RAW DATA
-# -------------------------------------------------
-print("📥 Loading dataset:", RAW_DATA_PATH)
-df = pd.read_csv(RAW_DATA_PATH)
-print("Original shape:", df.shape)
-
-# -------------------------------------------------
-# ENGINEERED FEATURES (Required)
-# -------------------------------------------------
-
-# ---------- FX COST ----------
-if "cc1 fx margin" in df.columns:
-    df["fx_cost_pct"] = df["cc1 fx margin"].astype(float)
-elif "fx_margin" in df.columns:
-    df["fx_cost_pct"] = df["fx_margin"].astype(float)
-else:
-    # fallback synthetic
-    df["fx_cost_pct"] = np.random.uniform(0.1, 3.0, len(df))
-
-# ---------- TAX COST ----------
-if "withholding_tax_rate" in df.columns:
-    df["tax_cost_pct"] = df["withholding_tax_rate"].astype(float)
-else:
-    df["tax_cost_pct"] = np.random.uniform(0.5, 15.0, len(df))
-
-# ---------- COMPLIANCE COST NORMALIZATION ----------
-if "compliance_documentation_cost" in df.columns:
-    c = df["compliance_documentation_cost"]
-    df["compliance_cost_norm"] = (c - c.min()) / (c.max() - c.min())
-else:
-    df["compliance_cost_norm"] = np.random.uniform(0, 1, len(df))
-
-# ---------- RISK NORMALIZATION ----------
-df["political_risk_norm"] = df["political_stability_index"] / 100
-df["regulatory_risk_norm"] = df["regulatory_risk_score"] / 100
-df["aml_risk_norm"] = df["aml_risk_index"] / 100
-
-# ---------- TARGET VARIABLE (Friction Score) ----------
-df["friction_score"] = (
-    0.35 * df["fx_cost_pct"] +
-    0.25 * df["tax_cost_pct"] +
-    0.15 * df["regulatory_risk_norm"] +
-    0.15 * df["aml_risk_norm"] +
-    0.10 * df["compliance_cost_norm"]
-).astype(float)
-
-print("Engineered features added.")
-print("New dataset shape:", df.shape)
-
-# -------------------------------------------------
-# FEATURE LIST FOR MODEL
-# -------------------------------------------------
-FEATURE_COLS = [
-    "political_stability_index",
-    "regulatory_quality_score",
-    "rule_of_law_index",
-    "government_effectiveness",
-    "financial_system_development",
-    "banking_sector_stability",
-    "payment_system_efficiency",
-    "aml_effectiveness_score",
-    "tax_transparency_score",
-    "reporting_requirements_index",
-    "currency_convertibility_score",
-    "capital_mobility_index",
-    "treaty_network_density",
-    "financial_sanctions_risk",
-    "dispute_resolution_mechanism",
-    "bilateral_tax_treaty_strength",
-    "double_taxation_avoidance",
-    "information_exchange_agreement",
-    "jurisdictional_hops_count",
-    "regulatory_domain_changes",
-    "currency_conversions_count",
-    "withholding_tax_rate",
-    "financial_transaction_tax",
-    "compliance_documentation_cost",
-    "settlement_risk_index",
-    "fx_cost_pct",
-    "tax_cost_pct",
-    "compliance_cost_norm",
-    "political_risk_norm",
-    "regulatory_risk_norm",
-    "aml_risk_norm"
-]
-
-# -------------------------------------------------
-# SELECT MODEL DATASET
-# -------------------------------------------------
-df_model = df[FEATURE_COLS + [TARGET]].copy()
-print("ML dataset shape:", df_model.shape)
-
-# -------------------------------------------------
-# SAVE FEATURE NAMES
-# -------------------------------------------------
+os.makedirs("data/processed", exist_ok=True)
 os.makedirs("models", exist_ok=True)
 
+# -------------------
+# LOAD DATA
+# -------------------
+print("📥 Loading dataset:", RAW_DATA_PATH)
+df = pd.read_csv(RAW_DATA_PATH)
+print("Raw shape:", df.shape)
+
+# -------------------
+# BASIC CLEANING
+# -------------------
+df = df.copy()
+df.replace([np.inf, -np.inf], np.nan, inplace=True)
+df.fillna(df.median(numeric_only=True), inplace=True)
+
+# -------------------
+# FEATURE ENGINEERING
+# -------------------
+
+# FX cost → convert bps to %
+df["fx_cost_pct"] = df["fx_spread_bps"] / 10000 * 100
+
+# Transfer fee as %
+df["fee_cost_pct"] = df["transfer_fee_percent"]
+
+# Tax cost normalized
+df["tax_cost_pct"] = df["tax_rate_percent"]
+
+# Risk composite (normalize to 0–1)
+risk_cols = [
+    "compliance_regulatory_score",
+    "sovereign_geopolitical_score",
+    "volatility_index"
+]
+
+df["risk_composite"] = df[risk_cols].mean(axis=1) / 100.0
+
+# Settlement friction normalized
+df["settlement_friction"] = df["settlement_time_days"] / df["settlement_time_days"].max()
+
+# Market + infrastructure score inverted (low infra = higher friction)
+df["infra_risk"] = (100 - df["market_infrastructure_score"]) / 100
+
+# Treaty friction (if no treaty → more friction)
+df["treaty_friction"] = df["has_tax_treaty"].apply(lambda x: 0 if x == 1 else 1)
+
+# Corridor stability inverse risk
+df["stability_risk"] = (100 - df["corridor_stability_score"]) / 100
+
+# -------------------
+# FINAL TARGET: FRICTION SCORE
+# Weighted composite
+# -------------------
+df["friction_score"] = (
+    0.30 * df["fx_cost_pct"] +
+    0.20 * df["fee_cost_pct"] +
+    0.15 * df["tax_cost_pct"] +
+    0.20 * df["risk_composite"] +
+    0.10 * df["settlement_friction"] +
+    0.05 * df["infra_risk"]
+)
+
+# -------------------
+# SELECT FEATURES
+# -------------------
+FEATURE_COLS = [
+    "corridor_volume_musd",
+    "fx_spread_bps",
+    "transfer_fee_percent",
+    "settlement_time_days",
+    "tax_rate_percent",
+    "withholding_tax_amount_musd",
+    "compliance_regulatory_score",
+    "sovereign_geopolitical_score",
+    "volatility_index",
+    "market_infrastructure_score",
+    "currency_convertibility",
+    "capital_controls",
+    "payment_system_efficiency",
+    "network_depth",
+    "corridor_stability_score",
+    # engineered features
+    "fx_cost_pct",
+    "fee_cost_pct",
+    "tax_cost_pct",
+    "risk_composite",
+    "settlement_friction",
+    "infra_risk",
+    "treaty_friction",
+    "stability_risk",
+]
+
+# Save feature names
 with open(FEATURE_NAMES_OUT, "w") as f:
     json.dump(FEATURE_COLS, f, indent=2)
 
 print("💾 Saved feature names →", FEATURE_NAMES_OUT)
 
-# -------------------------------------------------
-# PREPROCESSOR PIPELINE (Standard Scaler Only)
-# -------------------------------------------------
+# -------------------
+# PREPROCESSING (SCALING)
+# -------------------
 pipeline = Pipeline([
     ("scaler", StandardScaler())
 ])
 
-pipeline.fit(df_model[FEATURE_COLS])
+pipeline.fit(df[FEATURE_COLS])
 joblib.dump(pipeline, PREPROCESSOR_OUT)
 print("💾 Saved preprocessor →", PREPROCESSOR_OUT)
 
-# -------------------------------------------------
-# APPLY PREPROCESSING
-# -------------------------------------------------
-X_scaled = pipeline.transform(df_model[FEATURE_COLS])
-X_scaled = pd.DataFrame(X_scaled)
-X_scaled[TARGET] = df_model[TARGET].values
+X_scaled = pipeline.transform(df[FEATURE_COLS])
+X_scaled = pd.DataFrame(X_scaled, columns=FEATURE_COLS)
+X_scaled["friction_score"] = df["friction_score"].values
 
-# -------------------------------------------------
+# -------------------
 # TRAIN/VALID SPLIT
-# -------------------------------------------------
-train_df, valid_df = train_test_split(
-    X_scaled,
-    test_size=0.20,
-    random_state=42,
-    shuffle=True
-)
-
-os.makedirs("data", exist_ok=True)
-
+# -------------------
+train_df, valid_df = train_test_split(X_scaled, test_size=0.20, random_state=42)
 train_df.to_csv(TRAIN_OUT, index=False)
 valid_df.to_csv(VALID_OUT, index=False)
 
 print("💾 Saved TRAIN →", TRAIN_OUT)
 print("💾 Saved VALID →", VALID_OUT)
 
-print("\n🎉 Preprocessing COMPLETE — Ready for SageMaker Training!")
+print("\n🎉 Preprocessing COMPLETE — Ready for Training!")
