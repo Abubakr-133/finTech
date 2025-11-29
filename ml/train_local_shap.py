@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 # --------------------------------------------------------
 # CONFIG
 # --------------------------------------------------------
-TRAIN_CSV = "data/rpw_train.csv"
-VALID_CSV = "data/rpw_valid.csv"
+TRAIN_CSV = "data/processed/rpw_train.csv"
+VALID_CSV = "data/processed/rpw_valid.csv"
 FEATURE_NAMES_JSON = "models/feature_names.json"
 
 MODEL_OUT = "models/xgb_friction.bst"

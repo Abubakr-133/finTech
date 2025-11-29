@@ -5,7 +5,7 @@ from inference import predict_friction, explain_friction
 from functools import lru_cache
 
 @lru_cache(maxsize=1)
-def build_graph(corridor_csv="data/raw/corridor_friction_35_countries_merged.csv", predict_edges=True):
+def build_graph(corridor_csv="data/corridor_friction_35_countries_merged.csv", predict_edges=True):
     """
     Build directed graph G where nodes are countries and edges contain attributes:
       - friction (model prediction)
