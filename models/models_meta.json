@@ -1,0 +1,47 @@
+{
+  "feature_names": [
+    "corridor_volume_musd",
+    "fx_spread_bps",
+    "transfer_fee_percent",
+    "settlement_time_days",
+    "tax_rate_percent",
+    "withholding_tax_amount_musd",
+    "compliance_regulatory_score",
+    "sovereign_geopolitical_score",
+    "volatility_index",
+    "market_infrastructure_score",
+    "currency_convertibility",
+    "capital_controls",
+    "payment_system_efficiency",
+    "network_depth",
+    "corridor_stability_score",
+    "fx_cost_pct",
+    "fee_cost_pct",
+    "tax_cost_pct",
+    "risk_composite",
+    "settlement_friction",
+    "infra_risk",
+    "treaty_friction",
+    "stability_risk"
+  ],
+  "trained_models": {
+    "friction": {
+      "bst_path": "models\\xgb_friction.bst",
+      "sk_path": "models\\xgb_friction_sk.pkl",
+      "target_column": "friction_score"
+    },
+    "time": {
+      "bst_path": "models\\xgb_time.bst",
+      "sk_path": "models\\xgb_time_sk.pkl",
+      "target_column": "settlement_time_days"
+    }
+  },
+  "train_shape": [
+    1600,
+    24
+  ],
+  "valid_shape": [
+    400,
+    24
+  ]
+}
