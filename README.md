@@ -1,3 +1,11 @@
+<<<<<<< HEAD
+# finTech
+
+## Installation
+To install the required packages, run the following command:
+
+```pip install -r requirements.txt```
+=======
 Problem Statement:
   Efficient cross-border capital movement is fundamental to modern corporate finance, yet global money flows remain burdened by high friction, opacity, and inconsistent regulatory environments. When capital is transferred from one jurisdiction to another, it rarely travels in a straight, bilateral path. Instead, funds frequently pass through multiple intermediary countries—each introducing incremental costs, delays, compliance requirements, and FX risks.
 Despite the scale of international financial activity, corporations still lack a transparent, data-driven mechanism to understand how capital depreciates in value as it moves across borders or how alternative routing strategies could substantially reduce friction.
@@ -14,3 +22,4 @@ Currently, the capital flow ecosystem suffers from the following structural prob
   Even when financial institutions provide recommendations, they do not offer transparent, explainable reasons behind the suggested route. Decision-makers are forced to rely on opaque systems with limited clarity on why a route is more efficient.
 6. High Economic Impact
   Countries like India experience capital inefficiencies running into thousands of crores, driven solely by poor routing choices and limited visibility into optimized pathways. Treasury mis-optimization leads to avoidable loss of enterprise value—despite no change in business fundamentals.
+>>>>>>> 14f91c42bc269e1609df2cfc3b636f9a4d991430
