@@ -1,7 +1,7 @@
 # routing/graph_builder.py
 import pandas as pd
 import networkx as nx
-from routing.inference import predict_friction, explain_friction
+from inference import predict_friction, explain_friction
 from functools import lru_cache
 
 @lru_cache(maxsize=1)

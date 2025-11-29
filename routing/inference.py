@@ -31,47 +31,92 @@ def _row_to_df(row_dict, feature_names):
     df = pd.DataFrame([row_dict], columns=feature_names)
     return df
 
-def predict_friction(raw_row):
+def predict_friction(raw_row: dict) -> float:
     """
-    raw_row: dict of raw features matching the columns before scaling (i.e., the same inputs used in preprocess).
-    Returns: friction (float)
+    Robust prediction: always calls the underlying Booster with a DMatrix
+    constructed using FEATURE_NAMES. Pads/trims if necessary.
     """
-    feature_names, preprocessor, bst, explainer = load_model_artifacts()
-    # Create df from raw_row — preprocessor expects the original FEATURE_COLS order
-    X_raw = pd.DataFrame([raw_row])[feature_names]
-    # transform
-    X_scaled = preprocessor.transform(X_raw)
-    # ensure numpy array
-    dmat = xgb.DMatrix(X_scaled, feature_names=feature_names)
-    # use best_iteration if available
-    try:
-        best_it = bst.best_iteration
-        if best_it is not None:
-            pred = bst.predict(dmat, iteration_range=(0, best_it + 1))[0]
+    row_df = prepare_row(raw_row)               # returns DF ordered as FEATURE_NAMES
+    X_scaled = preprocessor.transform(row_df)   # numpy or array-like
+
+    # ensure numpy 2D array
+    if isinstance(X_scaled, pd.DataFrame):
+        X_arr = X_scaled.values
+    else:
+        X_arr = np.array(X_scaled)
+
+    if X_arr.ndim == 1:
+        X_arr = X_arr.reshape(1, -1)
+
+    expected = len(FEATURE_NAMES)
+    actual = X_arr.shape[1]
+    if actual != expected:
+        print(f"[DEBUG] After transform: expected {expected} features, got {actual}. Aligning...")
+        if actual < expected:
+            pad = np.zeros((X_arr.shape[0], expected - actual), dtype=X_arr.dtype)
+            X_arr = np.hstack([X_arr, pad])
+            print(f"[DEBUG] Padded to {X_arr.shape[1]}")
         else:
-            pred = bst.predict(dmat)[0]
-    except Exception:
-        pred = bst.predict(dmat)[0]
+            X_arr = X_arr[:, :expected]
+            print(f"[DEBUG] Trimmed to {X_arr.shape[1]}")
+
+    # Build DMatrix with exact feature names (critical)
+    dmat = xgb.DMatrix(X_arr, feature_names=FEATURE_NAMES)
+    booster = model.get_booster()
+
+    # Use best_iteration when present
+    try:
+        if hasattr(booster, "best_iteration") and booster.best_iteration is not None:
+            pred = booster.predict(dmat, iteration_range=(0, booster.best_iteration + 1))[0]
+        else:
+            pred = booster.predict(dmat)[0]
+    except Exception as e:
+        # Very last fallback — try sklearn predict but unlikely needed
+        print("[WARN] Booster.predict failed:", e)
+        pred = model.predict(X_arr)[0]
+
     return float(pred)
 
-def explain_friction(raw_row):
+
+def explain_friction(raw_row: dict, max_display: int = 10):
     """
-    Returns: dict with 'friction' and 'shap' (feature->value) for the single input
+    Returns (prediction, shap_df) using Booster + TreeExplainer.
     """
-    feature_names, preprocessor, bst, explainer = load_model_artifacts()
-    X_raw = pd.DataFrame([raw_row])[feature_names]
-    X_scaled = preprocessor.transform(X_raw)
-    X_scaled_df = pd.DataFrame(X_scaled, columns=feature_names)
-    # shap values
-    shap_values = explainer.shap_values(X_scaled_df)
-    # compute prediction
-    try:
-        best_it = bst.best_iteration
-        if best_it is not None:
-            pred = bst.predict(xgb.DMatrix(X_scaled, feature_names=feature_names), iteration_range=(0, best_it + 1))[0]
+    row_df = prepare_row(raw_row)
+    X_scaled = preprocessor.transform(row_df)
+    if isinstance(X_scaled, pd.DataFrame):
+        X_arr = X_scaled.values
+    else:
+        X_arr = np.array(X_scaled)
+    if X_arr.ndim == 1:
+        X_arr = X_arr.reshape(1, -1)
+
+    expected = len(FEATURE_NAMES)
+    if X_arr.shape[1] != expected:
+        print(f"[DEBUG] Explain: expected {expected}, got {X_arr.shape[1]}. Aligning...")
+        if X_arr.shape[1] < expected:
+            pad = np.zeros((X_arr.shape[0], expected - X_arr.shape[1]), dtype=X_arr.dtype)
+            X_arr = np.hstack([X_arr, pad])
         else:
-            pred = bst.predict(xgb.DMatrix(X_scaled, feature_names=feature_names))[0]
-    except Exception:
-        pred = bst.predict(xgb.DMatrix(X_scaled, feature_names=feature_names))[0]
-    shap_dict = dict(zip(feature_names, shap_values[0].tolist()))
-    return {"friction": float(pred), "shap": shap_dict}
+            X_arr = X_arr[:, :expected]
+
+    dmat = xgb.DMatrix(X_arr, feature_names=FEATURE_NAMES)
+    booster = model.get_booster()
+    explainer = shap.TreeExplainer(booster)
+    shap_vals = explainer.shap_values(dmat)[0]
+
+    shap_df = pd.DataFrame({"feature": FEATURE_NAMES, "shap_value": shap_vals})
+    shap_df["abs_shap"] = shap_df["shap_value"].abs()
+    shap_df = shap_df.sort_values("abs_shap", ascending=False).head(max_display).drop(columns=["abs_shap"]).reset_index(drop=True)
+
+    pred = None
+    try:
+        if hasattr(booster, "best_iteration") and booster.best_iteration is not None:
+            pred = booster.predict(dmat, iteration_range=(0, booster.best_iteration + 1))[0]
+        else:
+            pred = booster.predict(dmat)[0]
+    except Exception as e:
+        print("[WARN] Booster.predict failed in explain_friction:", e)
+        pred = model.predict(X_arr)[0]
+
+    return float(pred), shap_df

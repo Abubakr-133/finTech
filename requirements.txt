@@ -2,6 +2,6 @@ matplotlib
 pandas
 xgboost
 networkx
-streamlit
 numpy
 scikit-learn
+shap
