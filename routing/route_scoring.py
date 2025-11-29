@@ -36,18 +36,16 @@ def composite_score(breakdown: Dict, w_cost: float = 0.6, w_time: float = 0.2, w
     else:
         w_cost, w_time, w_risk = w_cost / total_w, w_time / total_w, w_risk / total_w
 
-    hops = breakdown.get("hops", 1) or 1
-    avg_cost = breakdown.get("total_cost", 0.0) / hops
-    avg_time = breakdown.get("total_time", 0.0) / hops
-    avg_risk = breakdown.get("total_risk", 0.0) / hops
-
     # Optionally apply simple scaling to bring components to comparable magnitude.
     # These scaling constants can be tuned per dataset; keep simple for the hackathon.
     cost_scale = 1.0
     time_scale = 1.0
     risk_scale = 1.0
-
-    score = w_cost * (avg_cost * cost_scale) + w_time * (avg_time * time_scale) + w_risk * (avg_risk * risk_scale)
+    
+    total_cost = breakdown.get("total_cost", 0.0)
+    total_time = breakdown.get("total_time", 0.0)
+    total_risk = breakdown.get("total_risk", 0.0)
+    score = w_cost * (total_cost * cost_scale) + w_time * (total_time * time_scale) + w_risk * (total_risk * risk_scale)
     return float(score)
 
 
@@ -57,7 +55,7 @@ def score_route_summary(breakdown: Dict, w_cost: float = 0.6, w_time: float = 0.
     return {
         "path": breakdown.get("path"),
         "hops": breakdown.get("hops"),
-        "total_cost": breakdown.get("total_cost"),
+        "totqal_cost": breakdown.get("total_cost"),
         "total_time": breakdown.get("total_time"),
         "total_risk": breakdown.get("total_risk"),
         "composite_score": score

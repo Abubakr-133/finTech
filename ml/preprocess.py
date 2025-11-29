@@ -49,6 +49,8 @@ df["fee_cost_pct"] = df["transfer_fee_percent"]
 # Tax cost normalized
 df["tax_cost_pct"] = df["tax_rate_percent"]
 
+df["total_cost_pct"] = df["fx_cost_pct"] + df["fee_cost_pct"] + df["tax_cost_pct"]
+
 # Risk composite (normalize to 0–1)
 risk_cols = [
     "compliance_regulatory_score",
@@ -111,6 +113,7 @@ FEATURE_COLS = [
     "infra_risk",
     "treaty_friction",
     "stability_risk",
+    "total_cost_pct"
 ]
 
 # Save feature names

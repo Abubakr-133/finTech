@@ -21,5 +21,6 @@
   "settlement_friction",
   "infra_risk",
   "treaty_friction",
-  "stability_risk"
+  "stability_risk",
+  "total_cost_pct"
 ]

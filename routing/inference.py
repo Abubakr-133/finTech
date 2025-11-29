@@ -1,11 +1,10 @@
 # routing/inference.py
 """
-Robust inference helpers.
-
-- Loads preprocessor + feature_names.
-- Tries to load boosters for friction/cost/time but will not raise if any are missing.
-- predict_edge_metrics(raw_row) returns available predictions and falls back to proxies when necessary.
-- explain_edge_metrics works only for targets whose boosters are loaded.
+Inference module with multi-target predictions and SHAP explainability.
+Exposes:
+- predict_edge_metrics(raw_row) -> {'friction','total_cost_pct','settlement_time_days'}
+- explain_edge(raw_row, target) -> (pred, shap_df, summary_dict)
+- explain_route(path_edges, top_n=5) -> aggregated explanation for a multi-hop path
 """
 
 import os
@@ -15,13 +14,27 @@ from typing import Dict, Tuple, Optional
 import joblib
 import numpy as np
 import pandas as pd
+
+# ensure package path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import xgboost as xgb
 
-# allow running from module or direct file
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# local shap utilities
+from ml.shap_utils import load_explainers, explain_row, summarize_shap_df, save_force_plot_single
+
+# Paths
+ROOT = os.path.dirname(os.path.dirname(__file__))
 MODELS_DIR = os.path.join(ROOT, "models")
-PREPROCESSOR_PATH = os.path.join(MODELS_DIR, "preprocessor.pkl")
 FEATURES_PATH = os.path.join(MODELS_DIR, "feature_names.json")
+PREPROCESSOR_PATH = os.path.join(MODELS_DIR, "preprocessor.pkl")
+
+# load artifacts via shap_utils loader
+_artifacts = load_explainers()
+preprocessor = _artifacts["preprocessor"]
+FEATURE_NAMES = _artifacts["feature_names"]
+_boosters = _artifacts["boosters"]   # dict of Booster objects
+_explainers = _artifacts["explainers"]
 
 # model filenames (update if yours differ)
 BST_FRICTION_PATH = os.path.join(MODELS_DIR, "xgb_friction.bst")
@@ -119,6 +132,7 @@ def prepare_row(raw_row: Dict) -> pd.DataFrame:
     return df
 
 def _build_dmatrix_from_scaled(X_scaled) -> xgb.DMatrix:
+    X_scaled = preprocessor.transform(df_ordered)
     if isinstance(X_scaled, pd.DataFrame):
         X_arr = X_scaled.values
     else:
@@ -126,13 +140,11 @@ def _build_dmatrix_from_scaled(X_scaled) -> xgb.DMatrix:
     if X_arr.ndim == 1:
         X_arr = X_arr.reshape(1, -1)
     expected = len(FEATURE_NAMES)
-    actual = X_arr.shape[1]
-    if actual != expected:
-        if actual < expected:
-            pad = np.zeros((X_arr.shape[0], expected - actual), dtype=X_arr.dtype)
-            X_arr = np.hstack([X_arr, pad])
-        else:
-            X_arr = X_arr[:, :expected]
+    if X_arr.shape[1] < expected:
+        pad = np.zeros((1, expected - X_arr.shape[1]))
+        X_arr = np.hstack([X_arr, pad])
+    elif X_arr.shape[1] > expected:
+        X_arr = X_arr[:, :expected]
     return xgb.DMatrix(X_arr, feature_names=FEATURE_NAMES)
 
 def _booster_predict_single(booster: xgb.Booster, dmat: xgb.DMatrix) -> float:
@@ -147,100 +159,126 @@ def _booster_predict_single(booster: xgb.Booster, dmat: xgb.DMatrix) -> float:
 # -------------------------
 # Public API
 # -------------------------
-def predict_edge_metrics(raw_row: Dict) -> Dict[str, float]:
+def predict_edge_metrics(raw_row: dict) -> dict:
     """
-    Returns dict with keys:
-      - friction  (float)
-      - total_cost_pct (float)
-      - settlement_time_days (float)
-
-    Uses ML if boosters available; falls back to proxy calculations if not.
+    Return model-predicted metrics for a single corridor row.
+    {
+      'friction': float,
+      'total_cost_pct': float,
+      'settlement_time_days': float
+    }
     """
-    # prepare features
-    row_df = prepare_row(raw_row)
+    df = prepare_row(raw_row)
     X_scaled = preprocessor.transform(row_df)
     dmat = _build_dmatrix_from_scaled(X_scaled)
 
-    out = {}
+    def _pred(booster):
+        best_it = getattr(booster, "best_iteration", None)
+        if best_it is not None:
+            return float(booster.predict(dmat, iteration_range=(0, best_it + 1))[0])
+        return float(booster.predict(dmat)[0])
 
-    # friction
-    if bst_friction is not None:
-        try:
-            out["friction"] = _booster_predict_single(bst_friction, dmat)
-        except Exception:
-            out["friction"] = None
-    else:
-        out["friction"] = None
+    pred_friction = _pred(_boosters["friction"])
+    pred_cost = _pred(_boosters["cost"])
+    pred_time = _pred(_boosters["time"])
 
-    # cost
-    if bst_cost is not None:
-        try:
-            out["total_cost_pct"] = _booster_predict_single(bst_cost, dmat)
-        except Exception:
-            out["total_cost_pct"] = None
-    else:
-        out["total_cost_pct"] = None
+    return {"friction": float(pred_friction),
+            "total_cost_pct": float(pred_cost),
+            "settlement_time_days": float(pred_time)}
 
-    # time
-    if bst_time is not None:
-        try:
-            out["settlement_time_days"] = _booster_predict_single(bst_time, dmat)
-        except Exception:
-            out["settlement_time_days"] = None
-    else:
-        out["settlement_time_days"] = None
 
-    # fill missing predictions with reasonable proxies
-    # proxy cost: fx_spread_bps/100 + transfer_fee_percent + tax_rate_percent/100
-    if out.get("total_cost_pct") is None:
-        fx = float(raw_row.get("fx_spread_bps", 0.0)) / 100.0
-        fee = float(raw_row.get("transfer_fee_percent", 0.0))
-        tax = float(raw_row.get("tax_rate_percent", 0.0)) / 100.0
-        out["total_cost_pct"] = fx + fee + tax
-
-    # proxy settlement_time_days: use raw column if present or default 3
-    if out.get("settlement_time_days") is None:
-        out["settlement_time_days"] = float(raw_row.get("settlement_time_days", raw_row.get("transfer_time_estimate_days", 3.0)))
-
-    # proxy friction: if missing, use cost proxy
-    if out.get("friction") is None:
-        out["friction"] = out["total_cost_pct"]
-
-    return out
-
-# SHAP explanation only if booster exists
-def explain_edge_metrics(raw_row: Dict, target: str = "friction", max_display: int = 10):
+def explain_edge_metrics(raw_row: dict, target: str = "friction", top_n: int = 8) -> dict:
     """
-    Returns (pred_value, shap_df) for the requested target.
-    Raises ValueError if the booster for target isn't loaded.
+    Explain a single corridor (edge) prediction for the selected target.
+    Returns a dict with:
+    - pred: float
+    - shap_table: pd.DataFrame (feature, value, shap_value) (converted to dict)
+    - summary: {top_positive: [(feat, shap, value)...], top_negative: [...]}
+    - optional saved_plot: path to saved force-like bar plot
     """
-    tgt = target.lower()
-    if tgt in ("friction", "fric"):
-        booster = bst_friction
-    elif tgt in ("cost", "total_cost_pct"):
-        booster = bst_cost
-    elif tgt in ("time", "settlement_time_days"):
-        booster = bst_time
-    else:
-        raise ValueError("Invalid target for explain_edge_metrics")
+    pred, shap_df = explain_row(target, raw_row, _artifacts, max_display=50)
+    summary = summarize_shap_df(shap_df, top_n)
+    # save small bar plot for UI
+    try:
+        outpng = os.path.join(os.path.dirname(__file__), "..", "outputs", f"shap_{target}_single.png")
+        # shap_df contains top features only; use raw explainer to get full shap values if you want
+        # For simplicity, call shap_utils.save_force_plot_single analogously
+        shap_vals_full = _explainers[target].shap_values(_to_dmatrix_from_preprocessed(pd.DataFrame([ {k: raw_row.get(k,0.0) for k in FEATURE_NAMES} ])))[0]
+        save_force_plot_single(shap_vals_full, None, FEATURE_NAMES, outpng)
+    except Exception:
+        outpng = None
 
-    if booster is None:
-        raise ValueError(f"Model for target '{target}' is not available.")
+    return {"pred": float(pred), "shap_table": shap_df.to_dict(orient="records"), "summary": summary, "plot": outpng}
 
-    row_df = prepare_row(raw_row)
-    X_scaled = preprocessor.transform(row_df)
-    dmat = _build_dmatrix_from_scaled(X_scaled)
 
-    explainer = shap.TreeExplainer(booster)
-    shap_vals = explainer.shap_values(dmat)[0]
-    pred = _booster_predict_single(booster, dmat)
+def explain_route(edge_rows: list, target: str = "friction", top_n: int = 6) -> dict:
+    """
+    Given a list of raw edge rows (ordered), produce aggregated SHAP explanations:
+    - explains each edge individually (pred & top contributors)
+    - aggregates feature-level contributions across edges and maps to percentages
+    - returns a human-friendly explanation dict
 
-    shap_df = pd.DataFrame({"feature": FEATURE_NAMES, "shap_value": shap_vals})
-    shap_df["abs_shap"] = shap_df["shap_value"].abs()
-    shap_df = shap_df.sort_values("abs_shap", ascending=False).head(max_display).drop(columns=["abs_shap"]).reset_index(drop=True)
+    edge_rows: list of dicts [{...edge1...}, {...edge2...}, ...]
+    """
+    per_edge = []
+    agg = {}
 
-    return float(pred), shap_df
+    for i, row in enumerate(edge_rows):
+        e = explain_edge(row, target=target, top_n=top_n)
+        per_edge.append({"index": i, "from_to": f"{row.get('source_country','?')}→{row.get('destination_country','?')}", **e})
+        # aggregate shap contributions by feature name
+        for rec in e["shap_table"]:
+            feat = rec["feature"]
+            shap_v = float(rec["shap_value"])
+            agg[feat] = agg.get(feat, 0.0) + shap_v
 
-# quick info when imported
+    # convert agg to sorted list
+    agg_list = sorted([(k, float(v)) for k, v in agg.items()], key=lambda x: abs(x[1]), reverse=True)
+    total_abs = sum(abs(v) for _, v in agg_list) or 1.0
+    agg_percent = [{"feature": k, "total_shap": v, "pct_of_total": float(abs(v) / total_abs * 100.0)} for k, v in agg_list]
+
+    # top overall contributors across route
+    top_overall = agg_percent[:top_n]
+
+    # Build human readable sentences (simple templates)
+    reasons = []
+    for item in top_overall:
+        feat = item["feature"]
+        pct = round(item["pct_of_total"], 1)
+        reasons.append(f"{feat} accounted for ~{pct}% of the route's {target} contribution")
+
+    return {
+        "target": target,
+        "per_edge": per_edge,
+        "aggregated": agg_percent,
+        "top_overall": top_overall,
+        "readable_reasons": reasons
+    }
+
+
+# quick interactive demo when run directly
 if __name__ == "__main__":
-    print("Models available:", models_available())
+    sample = {
+        "source_country": "Australia",
+        "destination_country": "United States",
+        "corridor_volume_musd": 15518.63,
+        "fx_spread_bps": 77.24,
+        "transfer_fee_percent": 1.85,
+        "settlement_time_days": 3.07,
+        "has_tax_treaty": 0,
+        "tax_rate_percent": 5.79,
+        "withholding_tax_amount_musd": 898.5287,
+        "compliance_regulatory_score": 37.85,
+        "sovereign_geopolitical_score": 60.09,
+        "volatility_index": 58.81,
+        "market_infrastructure_score": 35.44,
+        "currency_convertibility": 39.95,
+        "capital_controls": 0.16,
+        "payment_system_efficiency": 0.423,
+        "network_depth": 0.38,
+        "corridor_stability_score": 50.1,
+    }
+    print("Predict metrics:", predict_edge_metrics(sample))
+    print("Explain edge (friction):", explain_edge(sample, target="friction")["summary"])
+    # route explain demo with two edges
+    print("Route explain:", explain_route([sample, sample], target="cost")["readable_reasons"])
