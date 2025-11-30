@@ -132,7 +132,6 @@ def prepare_row(raw_row: Dict) -> pd.DataFrame:
     return df
 
 def _build_dmatrix_from_scaled(X_scaled) -> xgb.DMatrix:
-    X_scaled = preprocessor.transform(df_ordered)
     if isinstance(X_scaled, pd.DataFrame):
         X_arr = X_scaled.values
     else:
@@ -169,7 +168,7 @@ def predict_edge_metrics(raw_row: dict) -> dict:
     }
     """
     df = prepare_row(raw_row)
-    X_scaled = preprocessor.transform(row_df)
+    X_scaled = preprocessor.transform(df)
     dmat = _build_dmatrix_from_scaled(X_scaled)
 
     def _pred(booster):

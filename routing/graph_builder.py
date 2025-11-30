@@ -29,7 +29,7 @@ import networkx as nx
 
 # Try importing inference utilities. If package import fails, try local import fallback.
 try:
-    import inference
+    import routing.inference
 except Exception:
     try:
         # allow running the file directly during development

@@ -5,3 +5,6 @@ networkx
 numpy
 scikit-learn
 shap
+fastapi
+uvicorn
+pydantic
