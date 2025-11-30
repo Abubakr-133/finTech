@@ -28,13 +28,42 @@ class RouteEdge(BaseModel):
     settlement_time_days: float
     metadata: Optional[Dict] = None
 
-# class RouteResponse(BaseModel):
-#     path: List[str]
-#     edges: List[RouteEdge]
-#     total_cost: float
-#     total_time: float
-#     total_risk: float
-#     composite_score: float
+class RouteResponse(BaseModel):
+    path: List[str]
+    edges: List[RouteEdge]
+    total_cost: float
+    total_time: float
+    total_risk: float
+    composite_score: float
+
+class RouteRow(BaseModel):
+    route: str
+    net: str
+    friction: str
+    vsDirect: str
+    time: str
+    risk: str
+    path: str
+    tags: List[str]
+
+class FullRow(BaseModel):
+    route: str
+    costPercent: float
+    timeDays: float
+    riskScore: int
+    compositeScore: int
+
+class HopRow(BaseModel):
+    type: str
+    routes: int
+    avgCost: float
+    avgTime: float
+
+class ComparisonResponse(BaseModel):
+    comparisonData: List[RouteRow]
+    fullComparisonData: List[FullRow]
+    hopComparisonData: List[HopRow]
+
 
 class ExplainEdgeRequest(BaseModel):
     source_country: str

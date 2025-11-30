@@ -27,25 +27,27 @@
   ],
   "trained_models": {
     "friction": {
-      "column": "friction_score",
       "bst_path": "models\\xgb_friction.bst",
       "sk_path": "models\\xgb_friction_sk.pkl",
-      "rmse": 0.04973435602067666,
-      "mae": 0.037902237294115085
+      "target_column": "friction_score"
     },
     "cost": {
-      "column": "total_cost_pct",
       "bst_path": "models\\xgb_cost.bst",
       "sk_path": "models\\xgb_cost_sk.pkl",
-      "rmse": 0.018615243186879838,
-      "mae": 0.013430780386470595
+      "target_column": "total_cost_pct"
     },
     "time": {
-      "column": "settlement_time_days",
       "bst_path": "models\\xgb_time.bst",
       "sk_path": "models\\xgb_time_sk.pkl",
-      "rmse": 0.010093273212060777,
-      "mae": 0.007147378313180391
+      "target_column": "settlement_time_days"
     }
-  }
+  },
+  "train_shape": [
+    1600,
+    25
+  ],
+  "valid_shape": [
+    400,
+    25
+  ]
 }

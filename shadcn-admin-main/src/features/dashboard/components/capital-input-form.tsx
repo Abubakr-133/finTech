@@ -27,37 +27,36 @@ import { cn } from '@/lib/utils'
 import { Check, ChevronsUpDown } from 'lucide-react'
 
 const countries = [
-  { value: 'US', label: 'United States', currency: 'USD', flag: '🇺🇸' },
-  { value: 'CN', label: 'China', currency: 'CNY', flag: '🇨🇳' },
-  { value: 'JP', label: 'Japan', currency: 'JPY', flag: '🇯🇵' },
-  { value: 'DE', label: 'Germany', currency: 'EUR', flag: '🇩🇪' },
-  { value: 'IN', label: 'India', currency: 'INR', flag: '🇮🇳' },
-  { value: 'UK', label: 'United Kingdom', currency: 'GBP', flag: '🇬🇧' },
-  { value: 'FR', label: 'France', currency: 'EUR', flag: '🇫🇷' },
-  { value: 'IT', label: 'Italy', currency: 'EUR', flag: '🇮🇹' },
-  { value: 'BR', label: 'Brazil', currency: 'BRL', flag: '🇧🇷' },
-  { value: 'CA', label: 'Canada', currency: 'CAD', flag: '🇨🇦' },
-  { value: 'RU', label: 'Russia', currency: 'RUB', flag: '🇷🇺' },
-  { value: 'KR', label: 'South Korea', currency: 'KRW', flag: '🇰🇷' },
-  { value: 'AU', label: 'Australia', currency: 'AUD', flag: '🇦🇺' },
-  { value: 'MX', label: 'Mexico', currency: 'MXN', flag: '🇲🇽' },
-  { value: 'ES', label: 'Spain', currency: 'EUR', flag: '🇪🇸' },
-  { value: 'ID', label: 'Indonesia', currency: 'IDR', flag: '🇮🇩' },
-  { value: 'SA', label: 'Saudi Arabia', currency: 'SAR', flag: '🇸🇦' },
-  { value: 'TR', label: 'Turkey', currency: 'TRY', flag: '🇹🇷' },
-  { value: 'NL', label: 'Netherlands', currency: 'EUR', flag: '🇳🇱' },
-  { value: 'CH', label: 'Switzerland', currency: 'CHF', flag: '🇨🇭' },
-  { value: 'PL', label: 'Poland', currency: 'PLN', flag: '🇵🇱' },
-  { value: 'SE', label: 'Sweden', currency: 'SEK', flag: '🇸🇪' },
-  { value: 'BE', label: 'Belgium', currency: 'EUR', flag: '🇧🇪' },
-  { value: 'TH', label: 'Thailand', currency: 'THB', flag: '🇹🇭' },
-  { value: 'IE', label: 'Ireland', currency: 'EUR', flag: '🇮🇪' },
-  { value: 'AT', label: 'Austria', currency: 'EUR', flag: '🇦🇹' },
-  { value: 'NG', label: 'Nigeria', currency: 'NGN', flag: '🇳🇬' },
-  { value: 'IL', label: 'Israel', currency: 'ILS', flag: '🇮🇱' },
-  { value: 'SG', label: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
-  { value: 'AE', label: 'UAE', currency: 'AED', flag: '🇦🇪' },
-]
+  { value: 'China', label: 'China', currency: 'CNY', flag: '🇨🇳' },
+  { value: 'Japan', label: 'Japan', currency: 'JPY', flag: '🇯🇵' },
+  { value: 'United States', label: 'United States', currency: 'USD', flag: '🇺🇸' },
+  { value: 'Germany', label: 'Germany', currency: 'EUR', flag: '🇩🇪' },
+  { value: 'India', label: 'India', currency: 'INR', flag: '🇮🇳' },
+  { value: 'United Kingdom', label: 'United Kingdom', currency: 'GBP', flag: '🇬🇧' },
+  { value: 'France', label: 'France', currency: 'EUR', flag: '🇫🇷' },
+  { value: 'Italy', label: 'Italy', currency: 'EUR', flag: '🇮🇹' },
+  { value: 'Brazil', label: 'Brazil', currency: 'BRL', flag: '🇧🇷' },
+  { value: 'Canada', label: 'Canada', currency: 'CAD', flag: '🇨🇦' },
+  { value: 'Russia', label: 'Russia', currency: 'RUB', flag: '🇷🇺' },
+  { value: 'South Korea', label: 'South Korea', currency: 'KRW', flag: '🇰🇷' },
+  { value: 'Australia', label: 'Australia', currency: 'AUD', flag: '🇦🇺' },
+  { value: 'Mexico', label: 'Mexico', currency: 'MXN', flag: '🇲🇽' },
+  { value: 'Spain', label: 'Spain', currency: 'EUR', flag: '🇪🇸' },
+  { value: 'Indonesia', label: 'Indonesia', currency: 'IDR', flag: '🇮🇩' },
+  { value: 'Saudi Arabia', label: 'Saudi Arabia', currency: 'SAR', flag: '🇸🇦' },
+  { value: 'Turkey', label: 'Turkey', currency: 'TRY', flag: '🇹🇷' },
+  { value: 'Netherlands', label: 'Netherlands', currency: 'EUR', flag: '🇳🇱' },
+  { value: 'Switzerland', label: 'Switzerland', currency: 'CHF', flag: '🇨🇭' },
+  { value: 'Poland', label: 'Poland', currency: 'PLN', flag: '🇵🇱' },
+  { value: 'Sweden', label: 'Sweden', currency: 'SEK', flag: '🇸🇪' },
+  { value: 'Belgium', label: 'Belgium', currency: 'EUR', flag: '🇧🇪' },
+  { value: 'Thailand', label: 'Thailand', currency: 'THB', flag: '🇹🇭' },
+  { value: 'Ireland', label: 'Ireland', currency: 'EUR', flag: '🇮🇪' },
+  { value: 'Austria', label: 'Austria', currency: 'EUR', flag: '🇦🇹' },
+  { value: 'Nigeria', label: 'Nigeria', currency: 'NGN', flag: '🇳🇬' },
+  { value: 'Singapore', label: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
+  { value: 'UAE', label: 'UAE', currency: 'AED', flag: '🇦🇪' },
+];
 
 const currencies = Array.from(new Set(countries.map((c) => c.currency))).map(
   (curr) => ({ value: curr, label: curr })
@@ -74,9 +73,9 @@ export function CapitalInputForm({ onCompute }: { onCompute: (params: any) => vo
   const [isComputing, setIsComputing] = useState(false)
 
   const [sourceOpen, setSourceOpen] = useState(false)
-  const [sourceValue, setSourceValue] = useState('IN')
+  const [sourceValue, setSourceValue] = useState('India')
   const [destOpen, setDestOpen] = useState(false)
-  const [destValue, setDestValue] = useState('US')
+  const [destValue, setDestValue] = useState('United States')
 
   const handleCompute = () => {
     setIsComputing(true)

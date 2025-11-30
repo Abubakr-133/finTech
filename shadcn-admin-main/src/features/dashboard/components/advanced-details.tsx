@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronUp } from 'lucide-react'
@@ -14,129 +14,141 @@ import { Badge } from '@/components/ui/badge'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const comparisonData = [
-  {
-    route: 'Optimal',
-    net: '₹489.5cr',
-    friction: '2.1%',
-    vsDirect: '+₹8.5cr',
-    time: '1.5d',
-    risk: '3/10',
-    path: 'IN→SG→US',
-    tags: ['Recommended', 'DTAA'],
-  },
-  {
-    route: 'Direct',
-    net: '₹481.0cr',
-    friction: '3.8%',
-    vsDirect: '-',
-    time: '3.0d',
-    risk: '6/10',
-    path: 'IN→US',
-    tags: ['Standard'],
-  },
-  {
-    route: 'Via UAE',
-    net: '₹486.0cr',
-    friction: '2.8%',
-    vsDirect: '+₹5.0cr',
-    time: '2.0d',
-    risk: '5/10',
-    path: 'IN→AE→US',
-    tags: ['Fast'],
-  },
-  {
-    route: 'Via Mauritius',
-    net: '₹487.2cr',
-    friction: '1.9%',
-    vsDirect: '+₹6.2cr',
-    time: '2.5d',
-    risk: '5/10',
-    path: 'IN→MU→US',
-    tags: ['Low Cost'],
-  },
-]
+// const comparisonData = [
+//   {
+//     route: 'Optimal',
+//     net: '₹489.5cr',
+//     friction: '2.1%',
+//     vsDirect: '+₹8.5cr',
+//     time: '1.5d',
+//     risk: '3/10',
+//     path: 'IN→SG→US',
+//     tags: ['Recommended', 'DTAA'],
+//   },
+//   {
+//     route: 'Direct',
+//     net: '₹481.0cr',
+//     friction: '3.8%',
+//     vsDirect: '-',
+//     time: '3.0d',
+//     risk: '6/10',
+//     path: 'IN→US',
+//     tags: ['Standard'],
+//   },
+//   {
+//     route: 'Via UAE',
+//     net: '₹486.0cr',
+//     friction: '2.8%',
+//     vsDirect: '+₹5.0cr',
+//     time: '2.0d',
+//     risk: '5/10',
+//     path: 'IN→AE→US',
+//     tags: ['Fast'],
+//   },
+//   {
+//     route: 'Via Mauritius',
+//     net: '₹487.2cr',
+//     friction: '1.9%',
+//     vsDirect: '+₹6.2cr',
+//     time: '2.5d',
+//     risk: '5/10',
+//     path: 'IN→MU→US',
+//     tags: ['Low Cost'],
+//   },
+// ]
 
-const fullComparisonData = [
-  {
-    route: 'Optimal (IN→SG→US)',
-    costPercent: 2.1,
-    timeDays: 1.5,
-    riskScore: 3,
-    compositeScore: 92,
-  },
-  {
-    route: 'Direct (IN→US)',
-    costPercent: 3.8,
-    timeDays: 3.0,
-    riskScore: 6,
-    compositeScore: 65,
-  },
-  {
-    route: 'Via UAE (IN→AE→US)',
-    costPercent: 2.8,
-    timeDays: 2.0,
-    riskScore: 5,
-    compositeScore: 78,
-  },
-  {
-    route: 'Via Mauritius (IN→MU→US)',
-    costPercent: 1.9,
-    timeDays: 2.5,
-    riskScore: 5,
-    compositeScore: 82,
-  },
-]
+// const fullComparisonData = [
+//   {
+//     route: 'Optimal (IN→SG→US)',
+//     costPercent: 2.1,
+//     timeDays: 1.5,
+//     riskScore: 3,
+//     compositeScore: 92,
+//   },
+//   {
+//     route: 'Direct (IN→US)',
+//     costPercent: 3.8,
+//     timeDays: 3.0,
+//     riskScore: 6,
+//     compositeScore: 65,
+//   },
+//   {
+//     route: 'Via UAE (IN→AE→US)',
+//     costPercent: 2.8,
+//     timeDays: 2.0,
+//     riskScore: 5,
+//     compositeScore: 78,
+//   },
+//   {
+//     route: 'Via Mauritius (IN→MU→US)',
+//     costPercent: 1.9,
+//     timeDays: 2.5,
+//     riskScore: 5,
+//     compositeScore: 82,
+//   },
+// ]
 
-const hopComparisonData = [
-  { type: 'Direct Hop', routes: 1, avgCost: 3.8, avgTime: 3.0 },
-  { type: '2-Hop', routes: 3, avgCost: 2.3, avgTime: 2.0 },
-  { type: '3-Hop', routes: 2, avgCost: 2.1, avgTime: 1.8 },
-]
+// const hopComparisonData = [
+//   { type: 'Direct Hop', routes: 1, avgCost: 3.8, avgTime: 3.0 },
+//   { type: '2-Hop', routes: 3, avgCost: 2.3, avgTime: 2.0 },
+//   { type: '3-Hop', routes: 2, avgCost: 2.1, avgTime: 1.8 },
+// ]
 
 export function AdvancedDetails() {
   const [isOpen, setIsOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const [comparisonData, setComparisonData] = useState([])
+  const [fullComparisonData, setFullComparisonData] = useState([])
+  const [hopComparisonData, setHopComparisonData] = useState([])
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/routes/comparison")
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const payload = await res.json()
+        setComparisonData(payload.comparisonData || [])
+        setFullComparisonData(payload.fullComparisonData || [])
+        setHopComparisonData(payload.hopComparisonData || [])
+      } catch (err) {
+        console.error("Failed to load route data:", err)
+        setError(err.message || "Unknown error")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.8 }}
-    >
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
       <Card>
         <CardHeader>
           <div className='flex items-center justify-between'>
             <CardTitle>Details (Advanced)</CardTitle>
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => setIsOpen(!isOpen)}
-              className='gap-2'
-            >
-              {isOpen ? (
-                <>
-                  <ChevronUp className='h-4 w-4' />
-                  Hide
-                </>
-              ) : (
-                <>
-                  <ChevronDown className='h-4 w-4' />
-                  Show
-                </>
-              )}
+            <Button variant='ghost' size='sm' onClick={() => setIsOpen(!isOpen)} className='gap-2'>
+              {isOpen ? (<><ChevronUp className='h-4 w-4'/> Hide</>) : (<><ChevronDown className='h-4 w-4'/> Show</>)}
             </Button>
           </div>
         </CardHeader>
+
         <AnimatePresence>
           {isOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }}>
               <CardContent className='space-y-6 pt-0'>
+
+                {/* Loading / Error */}
+                {loading && <div className="p-4">Loading route details...</div>}
+                {error && <div className="p-4 text-red-500">Error: {error}</div>}
+
                 {/* Full Comparison Table */}
+                {!loading && !error && (
+                  <>
+
                 <div>
                   <h3 className='text-lg font-semibold mb-4'>Detailed Route Comparison</h3>
                   <div className='rounded-md border'>
@@ -289,6 +301,8 @@ export function AdvancedDetails() {
                     </Table>
                   </div>
                 </div>
+                  </>
+                )}
               </CardContent>
             </motion.div>
           )}

@@ -14,28 +14,63 @@ import { AdvancedDetails } from './components/advanced-details'
 import { AIBotPanel } from './components/ai-bot-panel'
 import { AnimatedBackground } from './components/animated-background'
 import { useRouteHistory } from '@/stores/routeHistoryStore'
+import axios from "axios";
+
 
 export function Dashboard() {
   const [showResults, setShowResults] = useState(false)
   const [isBotCollapsed, setIsBotCollapsed] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [resultData, setResultData] = useState<any>(null)
   const addScenario = useRouteHistory((state) => state.addScenario)
 
-  const handleCompute = (params: any) => {
-    setShowResults(true)
+  // Use an env var for base URL in production
+  const API_BASE = import.meta.env.VITE_PUBLIC_API_BASE || "http://localhost:8000"
 
-    // Save to history
-    addScenario({
-      source: params.source,
-      destination: params.destination,
-      amount: params.amount,
-      currency: params.currency,
-      optimalRoute: {
-        net: '₹489cr',
-        friction: '2.1%',
-        time: '1.5d',
-        path: ['IN', 'SG', 'US'],
-      },
-    })
+  const handleCompute = async (params: any) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const payload = {
+        source: params.source,
+        destination: params.destination,
+        amount: params.amount,
+        currency: params.currency || "INR",
+        weight_cost: params.weights?.cost ?? 0.6,
+        weight_time: params.weights?.time ?? 0.2,
+        weight_risk: params.weights?.risk ?? 0.2,
+        max_hops: params.maxHops ?? 3,
+        k: params.k ?? 3
+      }
+
+      const resp = await axios.post(`${API_BASE}/api/compute-route`, payload, { timeout: 20000 })
+      const data = resp.data
+      const optimalRoute = data.results[0]
+      // Persist to local route history store
+      addScenario({
+        source: params.source,
+        destination: params.destination,
+        amount: params.amount,
+        currency: params.currency,
+        optimalRoute: {
+          net: optimalRoute.total_cost, // adapt formatting
+          friction: optimalRoute.total_risk,
+          time: optimalRoute.total_time,
+          path: optimalRoute.path
+        },
+      })
+
+      setResultData(data)
+      setShowResults(true)
+    } catch (err: any) {
+      console.error("Compute error", err)
+      setError(err?.response?.data?.detail || err.message || "Request failed")
+      setShowResults(false)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -100,22 +135,20 @@ export function Dashboard() {
             {/* Input Section */}
             <CapitalInputForm onCompute={handleCompute} />
 
+            <div className='flex items-center gap-2'>
+          {loading && <div className="text-sm text-muted-foreground">Computing routes…</div>}
+          {error && <div className="text-sm text-red-500">Error: {error}</div>}
+        </div>
+
             {/* Results Section (Conditional) */}
-            {showResults && (
-              <div className='space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500'>
-                {/* Optimal Route Card */}
-                <OptimalRouteCard totalAmount={500} directLoss={3.8} />
-
-                {/* Why this Route Fits */}
-                <RouteExplanation />
-
-                {/* Other 3 Route Cards */}
-                <OtherRouteCards />
-
-                {/* Advanced Details (Toggleable) */}
-                <AdvancedDetails />
-              </div>
-            )}
+            {showResults && resultData && (
+          <div className='space-y-6'>
+            <OptimalRouteCard data={{'source':resultData.source, 'destination':resultData.destination,"amount":resultData.amount, "directLoss":resultData.results[0].composite_score, "route":resultData.results[0]}} totalAmount={500} directLoss={3.8} />
+            {/* <RouteExplanation data={resultData.optimal_route} />
+            <OtherRouteCards data={resultData.other_routes} />
+            <AdvancedDetails data={resultData.optimal_route} /> */}
+          </div>
+        )}
           </div>
 
           {/* Right Sidebar (AI Bot) */}
